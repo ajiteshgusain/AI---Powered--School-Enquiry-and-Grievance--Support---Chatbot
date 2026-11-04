@@ -141,5 +141,5 @@ app.get('/api/staff/tickets', (req, res) => {
 
 // Start Server
 app.listen(PORT, () => {
-    console.log(`🚀 Backend server is running live at http://localhost:${PORT}`);
+    console.log(` Backend server is running live at http://localhost:${PORT}`);
 });

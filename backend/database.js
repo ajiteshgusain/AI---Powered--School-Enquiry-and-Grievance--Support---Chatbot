@@ -5,9 +5,9 @@ const path = require('path');
 const dbPath = path.resolve(__dirname, 'school.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
-        console.error('❌ Error opening database', err.message);
+        console.error(' Error opening database', err.message);
     } else {
-        console.log('✅ Connected to SQLite database successfully.');
+        console.log(' Connected to SQLite database successfully.');
     }
 });
 
@@ -75,7 +75,7 @@ db.serialize(() => {
             const stmt = db.prepare(`INSERT INTO faqs (category, question, answer) VALUES (?, ?, ?)`);
             sampleFAQs.forEach(faq => stmt.run(faq));
             stmt.finalize();
-            console.log('📚 Sample FAQs loaded into database.');
+            console.log(' Sample FAQs loaded into database.');
         }
     });
 });
