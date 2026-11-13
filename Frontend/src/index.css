@@ -1,4 +1,4 @@
-:root {
+/* :root {
   --bg-primary: #f6f8fb;
   --bg-card: #ffffff;
   --text-main: #1f2937;
@@ -66,4 +66,4 @@ input, select, textarea { padding: 8px 10px; border: 1px solid var(--border); bo
 .message.bot { background: #f3f4f6; align-self: flex-start; border: 1px solid #e5e7eb; }
 .message.user { background: #2563eb; color: #fff; align-self: flex-end; }
 .chat-input { display: flex; gap: 8px; }
-.chat-input input { flex: 1; }
+.chat-input input { flex: 1; } */
