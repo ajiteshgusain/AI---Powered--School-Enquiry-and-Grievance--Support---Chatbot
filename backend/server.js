@@ -19,22 +19,22 @@ const SYSTEM_INSTRUCTION = `
 You are the official, warm, cheerful, and deeply empathetic AI Front-Office Assistant for "R.D. Public School".
 
 --- OFFICIAL SCHOOL FACTS (Keep answers simple, structured, and direct) ---
-• School Name: R.D. Public School
-• School Timings:
+- School Name: R.D. Public School
+- School Timings:
   - Nursery to Grade 2: 8:30 AM to 12:30 PM (Mon-Fri)
   - Grade 3 to Grade 12: 8:00 AM to 2:15 PM (Mon-Fri)
   - Front Office / Enquiry Desk: 8:00 AM to 3:30 PM (Mon-Sat)
-• Simple 3-Step Admission Process:
+- Simple 3-Step Admission Process:
   1. Fill the simple registration form online or at the front office desk.
   2. Submit basic documents: Birth Certificate, 2 passport photos, and previous report card.
   3. Friendly interaction with the teacher and fee submission to confirm the seat.
-• Fee Structure (Simplified):
+- Fee Structure (Simplified):
   - Primary (Grades 1-5): ₹4,500 / month
   - Middle (Grades 6-8): ₹5,200 / month
   - Secondary (Grades 9-12): ₹6,000 / month
   - Bus conveyance: ₹1,500 - ₹2,000 / month depending on distance.
-• Facilities: Smart AC classrooms, STEM & Robotics Lab, athletic ground, basketball court, GPS-tracked buses, and 24/7 CCTV surveillance.
-• Safety & Support: Dedicated full-time child counsellor and on-campus medical infirmary.
+- Facilities: Smart AC classrooms, STEM & Robotics Lab, athletic ground, basketball court, GPS-tracked buses, and 24/7 CCTV surveillance.
+- Safety & Support: Dedicated full-time child counsellor and on-campus medical infirmary.
 
 --- INSTRUCTIONS ---
 1. Greet the user warmly as the R.D. Public School assistant.
@@ -51,7 +51,7 @@ function authenticateToken(req, res, next) {
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Invalid or expired session.' });
+    if (err) return res.status(403).json({ error: 'Invalid or expired session. Please sign out and sign in again.' });
     req.user = user;
     next();
   });
@@ -66,8 +66,6 @@ app.post('/api/register', async (req, res) => {
   }
 
   const selectedRole = role || 'student';
-
-  // Verify special access codes for Staff/Teachers and Parents
   const STAFF_CODE = process.env.STAFF_SECRET_CODE || 'RDPS-ADMIN-2026';
   const PARENT_CODE = process.env.PARENT_SECRET_CODE || 'RDPS-PARENT-2026';
 
@@ -151,33 +149,75 @@ app.get('/api/chats', authenticateToken, async (req, res) => {
   }
 });
 
-// 4. CHAT WITH LOCAL OLLAMA LLM
+// 4. CHAT WITH AI (Cloud Groq in Production / Local Ollama on PC)
 app.post('/api/chat', authenticateToken, async (req, res) => {
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: 'Message is required' });
 
-  await ChatHistory.create({ userId: req.user.id, sender: 'user', text: message });
+  try {
+    await ChatHistory.create({ userId: req.user.id, sender: 'user', text: message });
+  } catch (dbErr) {
+    console.error('Chat history save error:', dbErr.message);
+  }
 
   try {
-    const response = await fetch('http://127.0.0.1:11434/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'llama3.2',
-        system: SYSTEM_INSTRUCTION,
-        prompt: message,
-        stream: false
-      })
-    });
+    let botReply = '';
 
-    const data = await response.json();
-    const botReply = data.response;
+    if (process.env.GROQ_API_KEY) {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.GROQ_API_KEY.trim()}`
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-oss-20b',
+          messages: [
+            { role: 'system', content: SYSTEM_INSTRUCTION },
+            { role: 'user', content: message }
+          ]
+        })
+      });
 
-    await ChatHistory.create({ userId: req.user.id, sender: 'bot', text: botReply });
+      const rawText = await response.text();
+      let data = {};
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        throw new Error(`Invalid JSON from Groq (${response.status}): ${rawText.slice(0, 120)}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || `Groq API error (${response.status})`);
+      }
+
+      botReply = data.choices?.[0]?.message?.content || 'No response from AI.';
+    } else {
+      const response = await fetch('http://127.0.0.1:11434/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'llama3.2',
+          system: SYSTEM_INSTRUCTION,
+          prompt: message,
+          stream: false
+        })
+      });
+      const data = await response.json();
+      botReply = data.response;
+    }
+
+    try {
+      await ChatHistory.create({ userId: req.user.id, sender: 'bot', text: botReply });
+    } catch (dbErr) {
+      console.error('Bot reply save error:', dbErr.message);
+    }
+
     res.json({ reply: botReply });
   } catch (err) {
+    console.error('AI Chat Error:', err.message);
     res.status(500).json({
-      reply: "I'm having trouble connecting to the local AI engine. Please ensure Ollama is running!"
+      reply: "I'm having trouble connecting to the AI service right now. Please try again shortly."
     });
   }
 });
